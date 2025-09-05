@@ -3,9 +3,22 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load the trained model, scaler, and encoders
+# Load the trained model (could be model only, or model + scaler, or model+scaler+encoders)
 with open("best_model.pkl", "rb") as f:
-    model, scaler, encoders = pickle.load(f)
+    loaded = pickle.load(f)
+
+# Handle different formats
+model, scaler, encoders = None, None, {}
+
+if isinstance(loaded, tuple):
+    if len(loaded) == 3:
+        model, scaler, encoders = loaded
+    elif len(loaded) == 2:
+        model, scaler = loaded
+    elif len(loaded) == 1:
+        model = loaded[0]
+else:
+    model = loaded
 
 st.title("🏦 Loan Approval Prediction App")
 
@@ -40,17 +53,19 @@ input_dict = {
 }
 df_input = pd.DataFrame(input_dict)
 
-# Apply label encoders
-for col in df_input.columns:
-    if col in encoders:
-        df_input[col] = encoders[col].transform(df_input[col].astype(str))
+# Apply encoders if available
+if encoders:
+    for col in df_input.columns:
+        if col in encoders:
+            df_input[col] = encoders[col].transform(df_input[col].astype(str))
 
-# Scale numerical features
-df_input_scaled = scaler.transform(df_input)
+# Scale numeric if scaler exists
+if scaler:
+    df_input = scaler.transform(df_input)
 
 # --- Predict ---
 if st.button("Predict Loan Approval"):
-    prediction = model.predict(df_input_scaled)[0]
+    prediction = model.predict(df_input)[0]
     if prediction == 1:
         st.success("✅ Loan Approved!")
     else:
