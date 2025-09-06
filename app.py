@@ -1,43 +1,59 @@
-# app.py
+# streamlit_app.py
 import streamlit as st
-import pickle
 import pandas as pd
+import numpy as np
+import pickle
 
-with open("preprocessor.pkl","rb") as f:
-    preprocessor = pickle.load(f)
+# Load the trained model, scaler, and encoders
+with open("best_model.pkl", "rb") as f:
+    model, scaler, encoders = pickle.load(f)
 
-X_new_processed = preprocessor.transform(X_new)
-pred = model.predict(X_new_processed)[0]
+st.title("🏦 Loan Approval Prediction App")
 
-st.title("Loan Approval Prediction")
+st.markdown("Fill in the applicant details below to predict loan approval:")
 
-# Build UI for inputs (put actual fields)
-ApplicantIncome = st.number_input("Applicant Income", min_value=0)
-CoapplicantIncome = st.number_input("Coapplicant Income", min_value=0)
-LoanAmount = st.number_input("Loan Amount", min_value=0)
-Loan_Amount_Term = st.number_input("Loan Amount Term (days)", min_value=0)
-Credit_History = st.selectbox("Credit History", [1.0, 0.0])
+# ---- User Inputs ----
+gender = st.selectbox("Gender", ["Male", "Female"])
+married = st.selectbox("Married", ["Yes", "No"])
+dependents = st.selectbox("Dependents", ["0", "1", "2", "3+"])
+education = st.selectbox("Education", ["Graduate", "Not Graduate"])
+self_employed = st.selectbox("Self Employed", ["Yes", "No"])
+applicant_income = st.number_input("Applicant Income", min_value=0, step=100)
+coapplicant_income = st.number_input("Coapplicant Income", min_value=0, step=100)
+loan_amount = st.number_input("Loan Amount", min_value=0, step=10)
+loan_amount_term = st.selectbox("Loan Amount Term (in months)", [12, 36, 60, 120, 180, 240, 300, 360, 480])
+credit_history = st.selectbox("Credit History", [0, 1])
+property_area = st.selectbox("Property Area", ["Urban", "Semiurban", "Rural"])
 
-Gender = st.selectbox("Gender", ['Male','Female'])
-Married = st.selectbox("Married", ['Yes','No'])
-Education = st.selectbox("Education", ['Graduate','Not Graduate'])
-Self_Employed = st.selectbox("Self Employed", ['Yes','No'])
-Property_Area = st.selectbox("Property Area", ['Urban','Semiurban','Rural'])
-
+# ---- Create Input DataFrame ----
 input_dict = {
-    'ApplicantIncome':[ApplicantIncome],
-    'CoapplicantIncome':[CoapplicantIncome],
-    'LoanAmount':[LoanAmount],
-    'Loan_Amount_Term':[Loan_Amount_Term],
-    'Credit_History':[Credit_History],
-    'Gender':[Gender],
-    'Married':[Married],
-    'Education':[Education],
-    'Self_Employed':[Self_Employed],
-    'Property_Area':[Property_Area]
+    "Gender": [gender],
+    "Married": [married],
+    "Dependents": [dependents],
+    "Education": [education],
+    "Self_Employed": [self_employed],
+    "ApplicantIncome": [applicant_income],
+    "CoapplicantIncome": [coapplicant_income],
+    "LoanAmount": [loan_amount],
+    "Loan_Amount_Term": [loan_amount_term],
+    "Credit_History": [credit_history],
+    "Property_Area": [property_area],
 }
 
-X_new = pd.DataFrame.from_dict(input_dict)
-if st.button("Predict"):
-    pred = model.predict(X_new)[0]
-    st.success("Approved" if pred==1 else "Rejected")
+df_input = pd.DataFrame(input_dict)
+
+# Apply label encoding (must match training encoders)
+for col in df_input.columns:
+    if col in encoders:
+        df_input[col] = encoders[col].transform(df_input[col].astype(str))
+
+# Scale numerical features
+df_input_scaled = scaler.transform(df_input)
+
+# ---- Prediction ----
+if st.button("Predict Loan Approval"):
+    prediction = model.predict(df_input_scaled)[0]
+    if prediction == 1:
+        st.success("✅ Loan Approved!")
+    else:
+        st.error("❌ Loan Rejected")
