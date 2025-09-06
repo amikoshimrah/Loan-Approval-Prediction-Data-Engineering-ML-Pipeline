@@ -3,8 +3,11 @@ import streamlit as st
 import pickle
 import pandas as pd
 
-with open('best_model.pkl','rb') as f:
-    model = pickle.load(f)
+with open("preprocessor.pkl","rb") as f:
+    preprocessor = pickle.load(f)
+
+X_new_processed = preprocessor.transform(X_new)
+pred = model.predict(X_new_processed)[0]
 
 st.title("Loan Approval Prediction")
 
