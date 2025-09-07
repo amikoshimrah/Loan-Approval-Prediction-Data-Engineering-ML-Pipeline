@@ -1,59 +1,74 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import os
 
-# Load the trained model, scaler, and encoders
-with open("loan_approval_model.pkl", "rb") as f:
-    model, scaler, encoders = pickle.load(f)
+# Path to the pickle
+MODEL_PKL = "loan_approval_model.pkl"
 
-st.title("🏦 Loan Approval Prediction App")
+# --- Load saved object (robust) ---
+with open(MODEL_PKL, "rb") as f:
+    saved = pickle.load(f)
 
-st.markdown("Fill in the applicant details below to predict loan approval:")
+# Initialize placeholders
+model = None
+scaler = None
+encoders = None
+pipeline = None
 
-# ---- User Inputs ----
-gender = st.selectbox("Gender", ["Male", "Female"])
-married = st.selectbox("Married", ["Yes", "No"])
-dependents = st.selectbox("Dependents", ["0", "1", "2", "3+"])
-education = st.selectbox("Education", ["Graduate", "Not Graduate"])
-self_employed = st.selectbox("Self Employed", ["Yes", "No"])
-applicant_income = st.number_input("Applicant Income", min_value=0, step=100)
-coapplicant_income = st.number_input("Coapplicant Income", min_value=0, step=100)
-loan_amount = st.number_input("Loan Amount", min_value=0, step=10)
-loan_amount_term = st.selectbox("Loan Amount Term (in months)", [12, 36, 60, 120, 180, 240, 300, 360, 480])
-credit_history = st.selectbox("Credit History", [0, 1])
-property_area = st.selectbox("Property Area", ["Urban", "Semiurban", "Rural"])
-
-# ---- Create Input DataFrame ----
-input_dict = {
-    "Gender": [gender],
-    "Married": [married],
-    "Dependents": [dependents],
-    "Education": [education],
-    "Self_Employed": [self_employed],
-    "ApplicantIncome": [applicant_income],
-    "CoapplicantIncome": [coapplicant_income],
-    "LoanAmount": [loan_amount],
-    "Loan_Amount_Term": [loan_amount_term],
-    "Credit_History": [credit_history],
-    "Property_Area": [property_area],
-}
-
-df_input = pd.DataFrame(input_dict)
-
-# Apply label encoding (must match training encoders)
-for col in df_input.columns:
-    if col in encoders:
-        df_input[col] = encoders[col].transform(df_input[col].astype(str))
-
-# Scale numerical features
-df_input_scaled = scaler.transform(df_input)
-
-# ---- Prediction ----
-if st.button("Predict Loan Approval"):
-    prediction = model.predict(df_input_scaled)[0]
-    if prediction == 1:
-        st.success("✅ Loan Approved!")
+# Interpret saved object
+if isinstance(saved, dict):
+    # common keys: 'model','pipeline','scaler','encoders'
+    pipeline = saved.get("pipeline") or saved.get("model") if isinstance(saved.get("model"), type(saved.get("model"))) else saved.get("pipeline")
+    model = saved.get("model") if saved.get("model") is not None else saved.get("estimator")
+    scaler = saved.get("scaler")
+    encoders = saved.get("encoders")
+    # if pipeline stored under 'pipeline' prefer that
+    if saved.get("pipeline") is not None:
+        pipeline = saved.get("pipeline")
+elif isinstance(saved, (list, tuple)):
+    # try to guess contents by length and type
+    if len(saved) == 3:
+        model, scaler, encoders = saved
+    elif len(saved) == 2:
+        # ambiguous: could be (model, encoders) or (model, scaler)
+        # detect by type: encoders often dict, scaler is usually a scaler object (has .transform)
+        a, b = saved
+        if isinstance(b, dict):
+            model, encoders = a, b
+        else:
+            # assume scaler-like if it has transform()
+            if hasattr(b, "transform"):
+                model, scaler = a, b
+            else:
+                model, encoders = a, b
+    elif len(saved) == 1:
+        model = saved[0]
     else:
-        st.error("❌ Loan Rejected")
+        # fallback: take first as model
+        model = saved[0]
+else:
+    # single object saved — likely a pipeline or estimator
+    model = saved
+
+# If model itself is a Pipeline (sklearn pipeline), use that as pipeline
+from sklearn.pipeline import Pipeline
+if isinstance(model, Pipeline):
+    pipeline = model
+    model = None
+
+if isinstance(pipeline, Pipeline):
+    # prefer to call pipeline.predict on raw inputs — no manual scaling/encoding needed
+    MODEL_TYPE = "pipeline"
+elif model is not None:
+    MODEL_TYPE = "separate"
+else:
+    MODEL_TYPE = "unknown"
+
+# Sanity print (helpful when running locally)
+print("Loaded model type:", MODEL_TYPE)
+print("pipeline:", type(pipeline))
+print("model:", type(model))
+print("scaler:", type(scaler))
+print("encoders:", type(encoders))
