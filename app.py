@@ -5,7 +5,7 @@ import numpy as np
 import pickle
 
 # Load the trained model, scaler, and encoders
-with open("best_model.pkl", "rb") as f:
+with open("loan_approval_model.pkl", "rb") as f:
     model, scaler, encoders = pickle.load(f)
 
 st.title("🏦 Loan Approval Prediction App")
